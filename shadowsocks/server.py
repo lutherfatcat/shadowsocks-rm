@@ -23,9 +23,14 @@ import os
 import logging
 import signal
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../'))
+if __name__ == '__main__':
+    import inspect
+
+    file_path = os.path.dirname(os.path.realpath(inspect.getfile(inspect.currentframe())))
+    sys.path.insert(0, os.path.join(file_path, '../'))
+
 from shadowsocks import shell, daemon, eventloop, tcprelay, udprelay, \
-    asyncdns, manager
+    asyncdns, manager, common
 
 
 def main():
@@ -33,13 +38,19 @@ def main():
 
     config = shell.get_config(False)
 
+    shell.log_shadowsocks_version()
+
     daemon.daemon_exec(config)
 
+    try:
+        import resource
+        logging.info(
+            'current process RLIMIT_NOFILE resource: soft %d hard %d' % resource.getrlimit(resource.RLIMIT_NOFILE))
+    except ImportError:
+        pass
+
     if config['port_password']:
-        if config['password']:
-            logging.warn('warning: port_password should not be used with '
-                         'server_port and password. server_port and password '
-                         'will be ignored')
+        pass
     else:
         config['port_password'] = {}
         server_port = config['server_port']
@@ -49,6 +60,9 @@ def main():
         else:
             config['port_password'][str(server_port)] = config['password']
 
+    if not config.get('dns_ipv6', False):
+        asyncdns.IPV6_CONNECTION_SUPPORT = False
+
     if config.get('manager_address', 0):
         logging.info('entering manager mode')
         manager.run(config)
@@ -56,33 +70,97 @@ def main():
 
     tcp_servers = []
     udp_servers = []
-
-    if 'dns_server' in config:  # allow override settings in resolv.conf
-        dns_resolver = asyncdns.DNSResolver(config['dns_server'])
+    dns_resolver = asyncdns.DNSResolver(config['black_hostname_list'])
+    if int(config['workers']) > 1:
+        stat_counter_dict = None
     else:
-        dns_resolver = asyncdns.DNSResolver()
-
+        stat_counter_dict = {}
     port_password = config['port_password']
+    config_password = config.get('password', 'm')
     del config['port_password']
-    for port, password in port_password.items():
+    for port, password_obfs in port_password.items():
+        method = config["method"]
+        protocol = config.get("protocol", 'origin')
+        protocol_param = config.get("protocol_param", '')
+        obfs = config.get("obfs", 'plain')
+        obfs_param = config.get("obfs_param", '')
+        bind = config.get("out_bind", '')
+        bindv6 = config.get("out_bindv6", '')
+        if type(password_obfs) == list:
+            password = password_obfs[0]
+            obfs = common.to_str(password_obfs[1])
+            if len(password_obfs) > 2:
+                protocol = common.to_str(password_obfs[2])
+        elif type(password_obfs) == dict:
+            password = password_obfs.get('password', config_password)
+            method = common.to_str(password_obfs.get('method', method))
+            protocol = common.to_str(password_obfs.get('protocol', protocol))
+            protocol_param = common.to_str(password_obfs.get('protocol_param', protocol_param))
+            obfs = common.to_str(password_obfs.get('obfs', obfs))
+            obfs_param = common.to_str(password_obfs.get('obfs_param', obfs_param))
+            bind = password_obfs.get('out_bind', bind)
+            bindv6 = password_obfs.get('out_bindv6', bindv6)
+        else:
+            password = password_obfs
         a_config = config.copy()
-        a_config['server_port'] = int(port)
-        a_config['password'] = password
-        logging.info("starting server at %s:%d" %
-                     (a_config['server'], int(port)))
-        tcp_servers.append(tcprelay.TCPRelay(a_config, dns_resolver, False))
-        udp_servers.append(udprelay.UDPRelay(a_config, dns_resolver, False))
+        ipv6_ok = False
+        logging.info("server start with protocol[%s] password [%s] method [%s] obfs [%s] obfs_param [%s]" %
+                     (protocol, password, method, obfs, obfs_param))
+        if 'server_ipv6' in a_config:
+            try:
+                if len(a_config['server_ipv6']) > 2 and a_config['server_ipv6'][0] == "[" and a_config['server_ipv6'][
+                    -1] == "]":
+                    a_config['server_ipv6'] = a_config['server_ipv6'][1:-1]
+                a_config['server_port'] = int(port)
+                a_config['password'] = password
+                a_config['method'] = method
+                a_config['protocol'] = protocol
+                a_config['protocol_param'] = protocol_param
+                a_config['obfs'] = obfs
+                a_config['obfs_param'] = obfs_param
+                a_config['out_bind'] = bind
+                a_config['out_bindv6'] = bindv6
+                a_config['server'] = a_config['server_ipv6']
+                logging.info("starting server at [%s]:%d" %
+                             (a_config['server'], int(port)))
+                tcp_servers.append(tcprelay.TCPRelay(a_config, dns_resolver, False, stat_counter=stat_counter_dict))
+                udp_servers.append(udprelay.UDPRelay(a_config, dns_resolver, False, stat_counter=stat_counter_dict))
+                if a_config['server_ipv6'] == b"::":
+                    ipv6_ok = True
+            except Exception as e:
+                shell.print_exception(e)
+
+        try:
+            a_config = config.copy()
+            a_config['server_port'] = int(port)
+            a_config['password'] = password
+            a_config['method'] = method
+            a_config['protocol'] = protocol
+            a_config['protocol_param'] = protocol_param
+            a_config['obfs'] = obfs
+            a_config['obfs_param'] = obfs_param
+            a_config['out_bind'] = bind
+            a_config['out_bindv6'] = bindv6
+            logging.info("starting server at %s:%d" %
+                         (a_config['server'], int(port)))
+            tcp_servers.append(tcprelay.TCPRelay(a_config, dns_resolver, False, stat_counter=stat_counter_dict))
+            udp_servers.append(udprelay.UDPRelay(a_config, dns_resolver, False, stat_counter=stat_counter_dict))
+        except Exception as e:
+            if not ipv6_ok:
+                shell.print_exception(e)
 
     def run_server():
         def child_handler(signum, _):
             logging.warn('received SIGQUIT, doing graceful shutting down..')
             list(map(lambda s: s.close(next_tick=True),
                      tcp_servers + udp_servers))
+
         signal.signal(getattr(signal, 'SIGQUIT', signal.SIGTERM),
                       child_handler)
 
         def int_handler(signum, _):
             sys.exit(1)
+
         signal.signal(signal.SIGINT, int_handler)
 
         try:
@@ -118,6 +196,7 @@ def main():
                         except OSError:  # child may already exited
                             pass
                     sys.exit()
+
                 signal.signal(signal.SIGTERM, handler)
                 signal.signal(signal.SIGQUIT, handler)
                 signal.signal(signal.SIGINT, handler)
