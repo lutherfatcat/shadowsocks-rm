@@ -21,8 +21,8 @@ COMMIT
 :POSTROUTING ACCEPT [0:0]
 COMMIT
 *filter
-:INPUT DROP [0:0]
-:FORWARD DROP [0:0]
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
 :OUTPUT ACCEPT [0:0]
 -A INPUT -i lo -j ACCEPT
 -A INPUT -p tcp -m tcp ! --tcp-flags FIN,SYN,RST,ACK SYN -m state --state NEW -j DROP
@@ -31,9 +31,6 @@ COMMIT
 -A INPUT -p tcp -m tcp --dport 80 -m state --state NEW -j ACCEPT
 -A INPUT -p tcp -m tcp --dport 443 -m state --state NEW -j ACCEPT
 -A INPUT -p tcp -m tcp --dport 3306 -m state --state NEW -j ACCEPT
--A INPUT -p tcp -m tcp --dport startport:endport -m state --state NEW -j ACCEPT
--A INPUT -p udp -m udp --dport startport:endport -m state --state NEW -j ACCEPT
--A INPUT -p tcp -m tcp --dport startport:endport -m connlimit --connlimit-above cnlt --connlimit-mask 32 --connlimit-saddr -j REJECT --reject-with tcp-reset
 -A INPUT -p icmp -m icmp --icmp-type 8 -m limit --limit 5/sec -j ACCEPT
 -A INPUT -j LOG
 -A INPUT -j DROP
