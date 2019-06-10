@@ -117,7 +117,7 @@ def daemon_start(pid_file, log_file):
         sys.exit(1)
 
     os.setsid()
-    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    signal.signal(signal.SIG_IGN, signal.SIGHUP)
 
     print('started')
     os.kill(ppid, signal.SIGTERM)

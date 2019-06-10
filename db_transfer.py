@@ -1,4 +1,4 @@
-﻿#!/usr/bin/python
+#!/usr/bin/python
 # -*- coding: UTF-8 -*-
 
 import logging
@@ -25,9 +25,6 @@ class TransferBase(object):
 		self.onlineuser_cache = lru_cache.LRUCache(timeout=60*30) #用户在线状态记录
 		self.pull_ok = False #记录是否已经拉出过数据
 		self.mu_ports = {}
-
-	def load_cfg(self):
-		pass
 
 	def push_db_all_user(self):
 		if self.pull_ok is False:
@@ -242,7 +239,6 @@ class TransferBase(object):
 		try:
 			while True:
 				load_config()
-				db_instance.load_cfg()
 				try:
 					db_instance.push_db_all_user()
 					rows = db_instance.pull_db_all_user()
@@ -282,29 +278,6 @@ class DbTransfer(TransferBase):
 	def __init__(self):
 		super(DbTransfer, self).__init__()
 		self.user_pass = {} #记录更新此用户流量时被跳过多少次
-		self.cfg = {
-			"host": "remotehost",
-			"port": 3306,
-			"user": "docker",
-			"password": "mypasswd",
-			"db": "whmcs",
-			"node_id": 0,
-			"transfer_mul": 1.0,
-			"ssl_enable": 0,
-			"ssl_ca": "",
-			"ssl_cert": "",
-			"ssl_key": ""}
-		self.load_cfg()
-
-	def load_cfg(self):
-		import json
-		config_path = get_config().MYSQL_CONFIG
-		cfg = None
-		with open(config_path, 'rb+') as f:
-			cfg = json.loads(f.read().decode('utf8'))
-
-		if cfg:
-			self.cfg.update(cfg)
 
 	def update_all_user(self, dt_transfer):
 		import cymysql
@@ -326,8 +299,8 @@ class DbTransfer(TransferBase):
 			if id in self.user_pass:
 				del self.user_pass[id]
 
-			query_sub_when += ' WHEN %s THEN u+%s' % (id, int(transfer[0] * self.cfg["transfer_mul"]))
-			query_sub_when2 += ' WHEN %s THEN d+%s' % (id, int(transfer[1] * self.cfg["transfer_mul"]))
+			query_sub_when += ' WHEN %s THEN u+%s' % (id, int(transfer[0] * get_config().TRANSFER_MUL))
+			query_sub_when2 += ' WHEN %s THEN d+%s' % (id, int(transfer[1] * get_config().TRANSFER_MUL))
 			update_transfer[id] = transfer
 
 			if query_sub_in is not None:
@@ -341,15 +314,27 @@ class DbTransfer(TransferBase):
 					' END, d = CASE port' + query_sub_when2 + \
 					' END, t = ' + str(int(last_time)) + \
 					' WHERE port IN (%s)' % query_sub_in
-		if self.cfg["ssl_enable"] == 1:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8',
-					ssl={'ca':self.cfg["ssl_ca"],'cert':self.cfg["ssl_cert"],'key':self.cfg["ssl_key"]})
+
+		if get_config().MYSQL_SSL_ENABLE == 1:
+			conn = cymysql.connect(
+				host=get_config().MYSQL_HOST,
+				port=get_config().MYSQL_PORT,
+				user=get_config().MYSQL_USER,
+				passwd=get_config().MYSQL_PASS,
+				db=get_config().MYSQL_DB,
+				charset='utf8',
+				ssl={
+					'ca': get_config().MYSQL_SSL_CA,
+					'cert': get_config().MYSQL_SSL_CERT,
+					'key': get_config().MYSQL_SSL_KEY})
 		else:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8')
+			conn = cymysql.connect(
+				host=get_config().MYSQL_HOST,
+				port=get_config().MYSQL_PORT,
+				user=get_config().MYSQL_USER,
+				passwd=get_config().MYSQL_PASS,
+				db=get_config().MYSQL_DB,
+				charset='utf8')
 
 		try:
 			cur = conn.cursor()
@@ -372,15 +357,26 @@ class DbTransfer(TransferBase):
 	def pull_db_all_user(self):
 		import cymysql
 		#数据库所有用户信息
-		if self.cfg["ssl_enable"] == 1:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8',
-					ssl={'ca':self.cfg["ssl_ca"],'cert':self.cfg["ssl_cert"],'key':self.cfg["ssl_key"]})
+		if get_config().MYSQL_SSL_ENABLE == 1:
+			conn = cymysql.connect(
+				host=get_config().MYSQL_HOST,
+				port=get_config().MYSQL_PORT,
+				user=get_config().MYSQL_USER,
+				passwd=get_config().MYSQL_PASS,
+				db=get_config().MYSQL_DB,
+				charset='utf8',
+				ssl={
+					'ca': get_config().MYSQL_SSL_CA,
+					'cert': get_config().MYSQL_SSL_CERT,
+					'key': get_config().MYSQL_SSL_KEY})
 		else:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8')
+			conn = cymysql.connect(
+				host=get_config().MYSQL_HOST,
+				port=get_config().MYSQL_PORT,
+				user=get_config().MYSQL_USER,
+				passwd=get_config().MYSQL_PASS,
+				db=get_config().MYSQL_DB,
+				charset='utf8')
 
 		try:
 			rows = self.pull_db_users(conn)
@@ -440,15 +436,26 @@ class Dbv3Transfer(DbTransfer):
 		alive_user_count = len(self.onlineuser_cache)
 		bandwidth_thistime = 0
 
-		if self.cfg["ssl_enable"] == 1:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8',
-					ssl={'ca':self.cfg["ssl_ca"],'cert':self.cfg["ssl_cert"],'key':self.cfg["ssl_key"]})
+		if get_config().MYSQL_SSL_ENABLE == 1:
+			conn = cymysql.connect(
+				host=get_config().MYSQL_HOST,
+				port=get_config().MYSQL_PORT,
+				user=get_config().MYSQL_USER,
+				passwd=get_config().MYSQL_PASS,
+				db=get_config().MYSQL_DB,
+				charset='utf8',
+				ssl={
+					'ca': get_config().MYSQL_SSL_CA,
+					'cert': get_config().MYSQL_SSL_CERT,
+					'key': get_config().MYSQL_SSL_KEY})
 		else:
-			conn = cymysql.connect(host=self.cfg["host"], port=self.cfg["port"],
-					user=self.cfg["user"], passwd=self.cfg["password"],
-					db=self.cfg["db"], charset='utf8')
+			conn = cymysql.connect(
+				host=get_config().MYSQL_HOST,
+				port=get_config().MYSQL_PORT,
+				user=get_config().MYSQL_USER,
+				passwd=get_config().MYSQL_PASS,
+				db=get_config().MYSQL_DB,
+				charset='utf8')
 		conn.autocommit(True)
 
 		for id in dt_transfer.keys():
@@ -462,8 +469,8 @@ class Dbv3Transfer(DbTransfer):
 			if id in self.user_pass:
 				del self.user_pass[id]
 
-			query_sub_when += ' WHEN %s THEN u+%s' % (id, int(transfer[0] * self.cfg["transfer_mul"]))
-			query_sub_when2 += ' WHEN %s THEN d+%s' % (id, int(transfer[1] * self.cfg["transfer_mul"]))
+			query_sub_when += ' WHEN %s THEN u+%s' % (id, int(transfer[0] * get_config().TRANSFER_MUL))
+			query_sub_when2 += ' WHEN %s THEN d+%s' % (id, int(transfer[1] * get_config().TRANSFER_MUL))
 			update_transfer[id] = transfer
 
 			if self.update_node_state:
@@ -472,8 +479,8 @@ class Dbv3Transfer(DbTransfer):
 					if id in self.port_uid_table:
 						cur.execute("INSERT INTO `user_traffic_log` (`id`, `user_id`, `u`, `d`, `node_id`, `rate`, `traffic`, `log_time`) VALUES (NULL, '" + \
 							str(self.port_uid_table[id]) + "', '" + str(transfer[0]) + "', '" + str(transfer[1]) + "', '" + \
-							str(self.cfg["node_id"]) + "', '" + str(self.cfg["transfer_mul"]) + "', '" + \
-							self.traffic_format((transfer[0] + transfer[1]) * self.cfg["transfer_mul"]) + "', unix_timestamp()); ")
+							str(get_config().NODE_ID) + "', '" + str(get_config().TRANSFER_MUL) + "', '" + \
+							self.traffic_format((transfer[0] + transfer[1]) * get_config().TRANSFER_MUL) + "', unix_timestamp()); ")
 				except:
 					logging.warn('no `user_traffic_log` in db')
 				cur.close()
@@ -500,7 +507,7 @@ class Dbv3Transfer(DbTransfer):
 				cur = conn.cursor()
 				try:
 					cur.execute("INSERT INTO `ss_node_online_log` (`id`, `node_id`, `online_user`, `log_time`) VALUES (NULL, '" + \
-						str(self.cfg["node_id"]) + "', '" + str(alive_user_count) + "', unix_timestamp()); ")
+						str(get_config().NODE_ID) + "', '" + str(alive_user_count) + "', unix_timestamp()); ")
 				except Exception as e:
 					logging.error(e)
 				cur.close()
@@ -508,7 +515,7 @@ class Dbv3Transfer(DbTransfer):
 				cur = conn.cursor()
 				try:
 					cur.execute("INSERT INTO `" + self.ss_node_info_name + "` (`id`, `node_id`, `uptime`, `load`, `log_time`) VALUES (NULL, '" + \
-						str(self.cfg["node_id"]) + "', '" + str(self.uptime()) + "', '" + \
+						str(get_config().NODE_ID) + "', '" + str(self.uptime()) + "', '" + \
 						str(self.load()) + "', unix_timestamp()); ")
 				except Exception as e:
 					logging.error(e)
@@ -531,7 +538,7 @@ class Dbv3Transfer(DbTransfer):
 		if self.update_node_state:
 			node_info_keys = ['traffic_rate']
 			try:
-				cur.execute("SELECT " + ','.join(node_info_keys) +" FROM ss_node where `id`='" + str(self.cfg["node_id"]) + "'")
+				cur.execute("SELECT " + ','.join(node_info_keys) +" FROM ss_node where `id`='" + str(get_config().NODE_ID) + "'")
 				nodeinfo = cur.fetchone()
 			except Exception as e:
 				logging.error(e)
@@ -548,7 +555,7 @@ class Dbv3Transfer(DbTransfer):
 			node_info_dict = {}
 			for column in range(len(nodeinfo)):
 				node_info_dict[node_info_keys[column]] = nodeinfo[column]
-			self.cfg['transfer_mul'] = float(node_info_dict['traffic_rate'])
+			#self.cfg['transfer_mul'] = float(node_info_dict['traffic_rate'])
 
 		cur = conn.cursor()
 		try:

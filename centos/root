@@ -1,0 +1,8 @@
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+HOME=/
+#This is a comment
+*/5 * * * * /usr/bin/php -q /root/waitcheck.php
+0 6 * * * ntpdate time.windows.com
+#0 4 * * * reboot
+0 1 * * * rm -rf /var/log/auth.log* /var/log/kern.log* /var/log/messages* /var/log/syslog*
