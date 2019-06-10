@@ -1,5 +1,5 @@
 FROM alpine:3.9
-MAINTAINER LUTHER LIU<lutherfatcat@gmail.com>
+MAINTAINER LUTHER LIU <lutherfatcat@gmail.com>
 
 ENV NODE_ID=0                     \
     DNS_1=1.0.0.1                 \
