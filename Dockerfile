@@ -4,7 +4,6 @@ MAINTAINER LUTHER LIU <lutherfatcat@gmail.com>
 ENV NODE_ID=0                     \
     DNS_1=1.0.0.1                 \
     DNS_2=8.8.8.8                 \
-    API_INTERFACE=legendsockssr   \
     MYSQL_HOST=remotehost         \
     MYSQL_PORT=3306               \
     MYSQL_USER=docker             \
@@ -12,6 +11,7 @@ ENV NODE_ID=0                     \
     MYSQL_DB=whmcs                \
     TRANSFER_MUL=1.0              \
     SS_TABLE=user                 \
+    API_INTERFACE=legendsockssr   \
     REDIRECT=github.com           \
     FAST_OPEN=false
 
