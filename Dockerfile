@@ -19,7 +19,6 @@ COPY . /root/shadowsocks-rm
 COPY /root/shadowsocks-rm/centos/* /root/
 WORKDIR /root/shadowsocks-rm
 
-
 RUN  apk --no-cache add \
                         supervisor \
                         grub2 \
