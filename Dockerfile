@@ -1,4 +1,4 @@
-FROM alpine:3.9
+FROM centos:7
 MAINTAINER LUTHER LIU<lutherfatcat@gmail.com>
 
 ENV NODE_ID=0                     \
